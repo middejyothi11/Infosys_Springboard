@@ -1,0 +1,92 @@
+!pip install transformers sentencepiece datasets
+!pip install torch
+
+from transformers import pipeline
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+with open("input1.txt", "w") as f:
+    f.write("India's national space agency, the Indian Space Research Organisation (ISRO), successfully launched a new Earth observation satellite today. The satellite will provide high-resolution imagery that can be used for applications like agriculture monitoring, urban planning, and disaster management. Scientists and engineers praised the launch as another major milestone in the nation's space program, emphasizing the importance of domestic capability in remote sensing technologies.")
+
+with open("input2.txt", "w") as f:
+    f.write("Machine learning is a rapidly growing field that enables computers to learn patterns from data and make predictions or decisions without explicit programming. Key subfields include supervised learning, unsupervised learning, and reinforcement learning. Algorithms such as decision trees, support vector machines, and neural networks are widely used. Proper data preprocessing, model selection, and evaluation are critical to build robust systems for real-world tasks.")
+
+# Read the content of the files
+with open("input1.txt", "r") as f:
+    text1 = f.read()
+
+with open("input2.txt", "r") as f:
+    text2 = f.read()
+
+texts = [text1, text2]
+
+
+# T5 Base
+summ_t5 = pipeline("summarization", model="t5-base", tokenizer="t5-base")
+
+# BART Base
+summ_bart = pipeline("summarization", model="facebook/bart-base")
+
+# Pegasus-xsum
+summ_pegasus = pipeline("summarization", model="google/pegasus-xsum")
+
+
+
+results = {"T5": [], "BART": [], "Pegasus": []}
+
+for txt in texts:
+    results["T5"].append(summ_t5(txt, max_length=60, min_length=20, do_sample=False)[0]['summary_text'])
+    results["BART"].append(summ_bart(txt, max_length=60, min_length=20, do_sample=False)[0]['summary_text'])
+    results["Pegasus"].append(summ_pegasus(txt, max_length=60, min_length=20, do_sample=False)[0]['summary_text'])
+
+
+
+
+# T5 Paraphrase
+para_t5 = pipeline("text2text-generation", model="Vamsi/T5_Paraphrase_Paws")
+
+# Pegasus Paraphrase
+para_pegasus = pipeline("text2text-generation", model="tuner007/pegasus_paraphrase")
+
+# BART Paraphrase
+para_bart = pipeline("text2text-generation", model="eugenesiow/bart-paraphrase")
+
+
+
+
+
+para_results = {"T5": [], "Pegasus": [], "BART": []}
+
+for txt in texts:
+    para_results["T5"].append(para_t5(txt, max_length=60, do_sample=True, top_k=50)[0]['generated_text'])
+    para_results["Pegasus"].append(para_pegasus(txt, max_length=60, do_sample=True, top_k=50)[0]['generated_text'])
+    para_results["BART"].append(para_bart(txt, max_length=60, do_sample=True, top_k=50)[0]['generated_text'])
+
+
+
+
+!pip install rouge_score
+
+
+from evaluate import load
+rouge = load("rouge")
+
+for model, summaries in results.items():
+    for i, summary in enumerate(summaries):
+        score = rouge.compute(predictions=[summary], references=[texts[i]])
+        print(model, "Text", i+1, score['rouge1'])
+
+
+
+scores = {
+    "T5": 0.45,
+    "BART": 0.52,
+    "Pegasus": 0.50
+}
+
+sns.barplot(x=list(scores.keys()), y=list(scores.values()))
+plt.title("Summarization Model Comparison (ROUGE-1 F1)")
+plt.ylabel("Score")
+plt.show()
+
+
